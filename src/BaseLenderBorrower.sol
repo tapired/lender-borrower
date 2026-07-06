@@ -49,6 +49,7 @@ abstract contract BaseLenderBorrower is BaseHealthCheck {
 
     /// Thresholds: lower limit on how much base token can be borrowed at a time.
     uint256 internal minAmountToBorrow;
+
     /**
      * @param _asset The address of the asset we are lending/borrowing.
      * @param _name The name of the strategy.
@@ -72,6 +73,8 @@ abstract contract BaseLenderBorrower is BaseHealthCheck {
         leaveDebtBehind = false;
         maxGasPriceToTend = 200 * 1e9;
         slippage = 500;
+        allowed[address(this)] = true;
+        emit AllowedSet(address(this), true);
 
         // Allow for address(0) for versions that don't use 4626 vault.
         if (_lenderVault != address(0)) {

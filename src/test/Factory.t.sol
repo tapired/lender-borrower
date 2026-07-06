@@ -131,5 +131,10 @@ contract FactoryTest is Setup {
             type(uint256).max,
             "wrong deposit limit"
         );
+        assertFalse(strategy.open(), "strategy should start closed");
+        assertTrue(
+            strategy.allowed(address(strategy)),
+            "strategy should be self allowed"
+        );
     }
 }

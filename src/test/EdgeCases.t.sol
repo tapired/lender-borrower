@@ -206,8 +206,8 @@ contract EdgeCasesTest is Setup {
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
 
-        // Skip time to allow lender vault share math to settle (avoids 1 wei rounding issue)
-        skip(1 hours);
+        // Skip time to let the lender position earn yield.
+        skip(30 days);
 
         uint256 shares = strategy.balanceOf(user);
         uint256 userBalanceBefore = asset.balanceOf(user);
@@ -233,8 +233,8 @@ contract EdgeCasesTest is Setup {
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
 
-        // Skip time to allow lender vault share math to settle (avoids 1 wei rounding issue)
-        skip(1 hours);
+        // Skip time to let the lender position earn yield.
+        skip(30 days);
 
         uint256 collateral = strategy.balanceOfCollateral();
         uint256 debtBefore = strategy.balanceOfDebt();
@@ -325,8 +325,8 @@ contract EdgeCasesTest is Setup {
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
 
-        // Skip time to allow lender vault share math to settle (avoids 1 wei rounding issue)
-        skip(1 hours);
+        // Skip time to let the lender position earn yield.
+        skip(30 days);
 
         // Shutdown
         vm.prank(management);

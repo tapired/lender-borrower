@@ -168,8 +168,6 @@ contract Setup is ExtendedTest, IEvents {
         // Set loss limit ratio to .1% (10 bps) to allow for interest accrual between reports
         _strategy.setLossLimitRatio(10);
 
-        _strategy.setOpen(true);
-
         vm.stopPrank();
 
         return address(_strategy);
@@ -180,6 +178,9 @@ contract Setup is ExtendedTest, IEvents {
         address _user,
         uint256 _amount
     ) public {
+        vm.prank(management);
+        _strategy.setAllowed(_user, true);
+
         vm.prank(_user);
         asset.approve(address(_strategy), _amount);
 

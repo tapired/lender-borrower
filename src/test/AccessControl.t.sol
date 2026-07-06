@@ -13,6 +13,25 @@ contract AccessControlTest is Setup {
                         MANAGEMENT FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
+    function test_closedStrategy_allowsOnlyWhitelistedDepositors() public {
+        assertFalse(strategy.open(), "strategy should start closed");
+        assertEq(strategy.availableDepositLimit(user), 0, "user not gated");
+        assertGt(
+            strategy.availableDepositLimit(address(strategy)),
+            0,
+            "strategy self deposit limit"
+        );
+
+        vm.prank(management);
+        strategy.setAllowed(user, true);
+
+        assertGt(
+            strategy.availableDepositLimit(user),
+            0,
+            "allowed user deposit limit"
+        );
+    }
+
     function test_setDepositLimit_onlyManagement() public {
         vm.prank(user);
         vm.expectRevert("!management");

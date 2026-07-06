@@ -248,6 +248,15 @@ contract MorphoTest is Setup {
     function test_availableDepositLimit(uint256 _amount) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
 
+        assertEq(
+            strategy.availableDepositLimit(user),
+            0,
+            "user should be gated"
+        );
+
+        vm.prank(management);
+        strategy.setAllowed(user, true);
+
         uint256 limitBefore = strategy.availableDepositLimit(user);
         assertGt(limitBefore, 0, "should have deposit room initially");
 
