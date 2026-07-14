@@ -237,29 +237,18 @@ contract DeployMorpho is Script {
                 borrowUsdOracle: address(0xbe5CE90e16B9d9d988D64b0E1f6ed46EbAfb9606) // USDC/USD
             })
         );
-
-        // vbWBTC/yvUSDT
+        /*
+        // wstETH/yvUSDC
         configs.push(
             StrategyConfig({
-                asset: address(0x0913DA6Da4b42f538B445599b46Bb4622342Cf52), // vbWBTC
-                name: "Morpho vbWBTC/yvUSDT Lender Borrower",
-                borrowToken: address(0x2DCa96907fde857dd3D816880A0df407eeB2D2F2),
-                lenderVault: address(0x9A6bd7B6Fd5C4F87eb66356441502fc7dCdd185B), // USDT ERC4626 vault
-                marketId: bytes32(0xd4ab732112fa9087c9c3c3566cd25bc78ee7be4f1b8bdfe20d6328debb818656),
-                borrowUsdOracle: address(0xF03E1566Fc6B0eBFA3dD3aA197759C4c6617ec78) // USDT/USD
-            })
-        );
-
-        // vbWETH/yvUSDC
-        configs.push(
-            StrategyConfig({
-                asset: address(0xEE7D8BCFb72bC1880D0Cf19822eB0A2e6577aB62), // vbWETH
-                name: "Morpho vbWETH/yvUSDC Lender Borrower",
+                asset: address(0xEE7D8BCFb72bC1880D0Cf19822eB0A2e6577aB62), // wstETH
+                name: "Morpho wstETH/yvUSDC Lender Borrower",
                 borrowToken: address(0x203A662b0BD271A6ed5a60EdFbd04bFce608FD36),
                 lenderVault: address(0x80c34BD3A3569E126e7055831036aa7b212cB159), // USDC ERC4626 vault
                 marketId: bytes32(0x2fb14719030835b8e0a39a1461b384ad6a9c8392550197a7c857cf9fcbd6c534),
                 borrowUsdOracle: address(0xbe5CE90e16B9d9d988D64b0E1f6ed46EbAfb9606) // USDC/USD
             })
         );
+        */
     }
 }

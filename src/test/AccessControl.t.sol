@@ -121,11 +121,15 @@ contract AccessControlTest is Setup {
                         EMERGENCY FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    function test_claimAndSellRewards_onlyEmergencyAuthorized() public {
+    function test_claimAndSellRewards_onlyKeepers() public {
         mintAndDepositIntoStrategy(strategy, user, minFuzzAmount);
 
         vm.prank(user);
-        vm.expectRevert("!emergency authorized");
+        vm.expectRevert("!keeper");
+        strategy.claimAndSellRewards();
+
+        // Keeper can call
+        vm.prank(keeper);
         strategy.claimAndSellRewards();
 
         // Management can call
@@ -133,26 +137,23 @@ contract AccessControlTest is Setup {
         strategy.claimAndSellRewards();
     }
 
-    function test_sellBorrowToken_onlyEmergencyAuthorized() public {
+    function test_sellBorrowToken_onlyManagement() public {
         mintAndDepositIntoStrategy(strategy, user, minFuzzAmount);
 
         vm.prank(user);
-        vm.expectRevert("!emergency authorized");
+        vm.expectRevert("!management");
         strategy.sellBorrowToken(0);
 
-        // After shutdown, management can call
-        vm.prank(management);
-        strategy.shutdownStrategy();
-
+        // Management can call
         vm.prank(management);
         strategy.sellBorrowToken(0);
     }
 
-    function test_buyBorrowToken_onlyEmergencyAuthorized() public {
+    function test_buyBorrowToken_onlyManagement() public {
         mintAndDepositIntoStrategy(strategy, user, minFuzzAmount);
 
         vm.prank(user);
-        vm.expectRevert("!emergency authorized");
+        vm.expectRevert("!management");
         strategy.buyBorrowToken(0);
 
         vm.prank(management);

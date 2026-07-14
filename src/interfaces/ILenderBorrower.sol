@@ -7,7 +7,7 @@ interface ILenderBorrower is IBaseHealthCheck {
     // Public Variables
     function borrowToken() external view returns (address);
 
-    function exchange() external view returns (address);
+    function EXCHANGE() external view returns (address);
 
     function leaveDebtBehind() external view returns (bool);
 
@@ -19,7 +19,7 @@ interface ILenderBorrower is IBaseHealthCheck {
 
     function maxGasPriceToTend() external view returns (uint256);
 
-    function slippage() external view returns (uint256);
+    function slippage() external view returns (uint64);
 
     // External Functions
     function setDepositLimit(uint256 _depositLimit) external;

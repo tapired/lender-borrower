@@ -45,7 +45,7 @@ contract OperationTest is Setup {
     }
 
     function test_reportDoesNotRevert(uint256 _amount) public {
-        _amount = bound(_amount, minFuzzAmount, maxFuzzAmount / 5);
+        _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
 
@@ -62,7 +62,7 @@ contract OperationTest is Setup {
     }
 
     function test_profitableReport(uint256 _amount) public {
-        _amount = bound(_amount, minFuzzAmount, maxFuzzAmount / 5);
+        _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
 
@@ -123,7 +123,7 @@ contract OperationTest is Setup {
     }
 
     function test_multipleReportCycles(uint256 _amount) public {
-        _amount = bound(_amount, minFuzzAmount, maxFuzzAmount / 5);
+        _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
 

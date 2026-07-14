@@ -2,7 +2,8 @@
 pragma solidity ^0.8.18;
 
 import {AprOracle} from "@periphery/AprOracle/AprOracle.sol";
-import {MorphoBlueLenderBorrower} from "../MorphoBlueLenderBorrower.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {IStrategyInterface} from "../interfaces/IStrategyInterface.sol";
 import {IMorpho, Id, Market, MarketParams} from "../interfaces/morpho/IMorpho.sol";
 import {IOracle} from "../interfaces/morpho/IOracle.sol";
 import {IIrm} from "../interfaces/morpho/IIrm.sol";
@@ -16,6 +17,8 @@ interface IRewardAprOracle {
 
 contract StrategyAprOracle is Governance {
     using MorphoBalancesLib for IMorpho;
+
+    error Int256Overflow();
 
     uint256 internal constant SECONDS_PER_YEAR = 31_556_952;
     uint256 internal constant WAD = 1e18;
@@ -38,14 +41,28 @@ contract StrategyAprOracle is Governance {
      * @notice Expected APR after a debt change. Positive _delta means more debt (assets) to the strategy.
      * @param _strategy The strategy to evaluate.
      * @param _delta Debt change in terms of strategy asset
-     * @return apr The expected net APR in 1e18.
+     * @return apr The expected return on equity in 1e18.
      */
     function aprAfterDebtChange(
         address _strategy,
         int256 _delta
     ) external view returns (uint256 apr) {
-        MorphoBlueLenderBorrower strat = MorphoBlueLenderBorrower(_strategy);
+        IStrategyInterface strat = IStrategyInterface(_strategy);
+        uint256 projectedAssets = _applyDelta(strat.totalAssets(), _delta);
+        if (projectedAssets == 0) return 0;
+
         int256 borrowDelta = _borrowDelta(strat, _delta);
+        uint256 currentDebt = strat.balanceOfDebt();
+        if (borrowDelta < 0 && _abs(borrowDelta) > currentDebt) {
+            if (currentDebt > uint256(type(int256).max)) {
+                revert Int256Overflow();
+            }
+            borrowDelta = -int256(currentDebt);
+        }
+
+        uint256 projectedDebt = _applyDelta(currentDebt, borrowDelta);
+        if (projectedDebt == 0) return 0;
+
         uint256 borrowApr = _borrowApr(strat, borrowDelta);
 
         // Reward APR from the lender vault (borrow token APR).
@@ -61,12 +78,28 @@ contract StrategyAprOracle is Governance {
             );
         }
 
-        // Net APR, floor at 0 to avoid underflow for unprofitable positions.
-        apr = rewardApr >= borrowApr ? rewardApr - borrowApr : 0;
+        // Floor unprofitable positions at zero because the Yearn APR oracle
+        // interface cannot represent a negative return.
+        if (rewardApr <= borrowApr) return 0;
+
+        (, , address oracleAddr, , ) = strat.marketParams();
+        uint256 projectedEquityInBorrow = Math.mulDiv(
+            projectedAssets,
+            IOracle(oracleAddr).price(),
+            ORACLE_PRICE_SCALE
+        );
+        if (projectedEquityInBorrow == 0) return 0;
+
+        // Return on equity = net spread * projected debt / projected equity.
+        apr = Math.mulDiv(
+            rewardApr - borrowApr,
+            projectedDebt,
+            projectedEquityInBorrow
+        );
     }
 
     function _borrowDelta(
-        MorphoBlueLenderBorrower strat,
+        IStrategyInterface strat,
         int256 deltaAsset
     ) internal view returns (int256) {
         if (deltaAsset == 0) return 0;
@@ -75,18 +108,30 @@ contract StrategyAprOracle is Governance {
         uint256 targetLtv = (strat.getLiquidateCollateralFactor() *
             strat.targetLTVMultiplier()) / 10_000;
 
-        int256 assetAtTarget = (deltaAsset * int256(targetLtv)) / int256(WAD);
-
         // Convert asset amount to borrow token via Morpho oracle price (loan per collateral, 1e36).
         (, , address oracleAddr, , ) = strat.marketParams();
         uint256 price = IOracle(oracleAddr).price(); // 1e36
         if (price == 0) return 0;
 
-        return (assetAtTarget * int256(price)) / int256(ORACLE_PRICE_SCALE);
+        uint256 absoluteDelta = _abs(deltaAsset);
+        uint256 assetAtTarget = Math.mulDiv(absoluteDelta, targetLtv, WAD);
+        uint256 absoluteBorrowDelta = Math.mulDiv(
+            assetAtTarget,
+            price,
+            ORACLE_PRICE_SCALE
+        );
+        if (absoluteBorrowDelta > uint256(type(int256).max)) {
+            revert Int256Overflow();
+        }
+
+        return
+            deltaAsset > 0
+                ? int256(absoluteBorrowDelta)
+                : -int256(absoluteBorrowDelta);
     }
 
     function _borrowApr(
-        MorphoBlueLenderBorrower strat,
+        IStrategyInterface strat,
         int256 borrowDelta
     ) internal view returns (uint256) {
         (
@@ -130,33 +175,49 @@ contract StrategyAprOracle is Governance {
         int256 borrowDelta
     ) internal pure returns (uint256 newBorrowAssets, uint256 newBorrowShares) {
         if (borrowDelta > 0) {
-            uint256 deltaAssets = uint256(borrowDelta);
-            uint256 deltaShares = SharesMathLib.toSharesUp(
-                deltaAssets,
+            uint256 increaseAssets = uint256(borrowDelta);
+            uint256 increaseShares = SharesMathLib.toSharesUp(
+                increaseAssets,
                 totalBorrowAssets,
                 totalBorrowShares
             );
             return (
-                totalBorrowAssets + deltaAssets,
-                totalBorrowShares + deltaShares
+                totalBorrowAssets + increaseAssets,
+                totalBorrowShares + increaseShares
             );
         }
 
-        uint256 deltaAssets = uint256(-borrowDelta);
-        if (deltaAssets >= totalBorrowAssets) return (0, 0);
+        uint256 decreaseAssets = _abs(borrowDelta);
+        if (decreaseAssets >= totalBorrowAssets) return (0, 0);
 
-        uint256 deltaShares = SharesMathLib.toSharesUp(
-            deltaAssets,
+        uint256 decreaseShares = SharesMathLib.toSharesDown(
+            decreaseAssets,
             totalBorrowAssets,
             totalBorrowShares
         );
-        if (deltaShares > totalBorrowShares) {
-            deltaShares = totalBorrowShares;
+        if (decreaseShares > totalBorrowShares) {
+            decreaseShares = totalBorrowShares;
         }
 
         return (
-            totalBorrowAssets - deltaAssets,
-            totalBorrowShares - deltaShares
+            totalBorrowAssets - decreaseAssets,
+            totalBorrowShares - decreaseShares
         );
+    }
+
+    function _applyDelta(
+        uint256 amount,
+        int256 delta
+    ) internal pure returns (uint256) {
+        if (delta >= 0) return amount + uint256(delta);
+
+        uint256 decrease = _abs(delta);
+        return decrease >= amount ? 0 : amount - decrease;
+    }
+
+    function _abs(int256 value) internal pure returns (uint256) {
+        unchecked {
+            return value < 0 ? uint256(-(value + 1)) + 1 : uint256(value);
+        }
     }
 }

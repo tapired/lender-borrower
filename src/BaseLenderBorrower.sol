@@ -17,7 +17,7 @@ abstract contract BaseLenderBorrower is BaseHealthCheck {
     uint256 internal constant WAD = 1e18;
 
     /// The exchange that will be used for swaps.
-    IExchange public immutable exchange;
+    IExchange public immutable EXCHANGE;
 
     /// The token we will be borrowing/supplying.
     address public immutable borrowToken;
@@ -64,7 +64,7 @@ abstract contract BaseLenderBorrower is BaseHealthCheck {
     ) BaseHealthCheck(_asset, _name) {
         require(_exchange != address(0), "!exchange");
         borrowToken = _borrowToken;
-        exchange = IExchange(_exchange);
+        EXCHANGE = IExchange(_exchange);
 
         // Set default variables
         depositLimit = type(uint256).max;
@@ -72,7 +72,7 @@ abstract contract BaseLenderBorrower is BaseHealthCheck {
         warningLTVMultiplier = 8_000;
         leaveDebtBehind = false;
         maxGasPriceToTend = 200 * 1e9;
-        slippage = 500;
+        slippage = 50;
         allowed[address(this)] = true;
         emit AllowedSet(address(this), true);
 
@@ -434,15 +434,27 @@ abstract contract BaseLenderBorrower is BaseHealthCheck {
         uint256 liquidity = balanceOfCollateral() + 1;
         uint256 lenderLiquidity = _lenderMaxWithdraw();
 
-        /// If we can't withdraw or supply, set liquidity = 0.
         if (lenderLiquidity < balanceOfLentAssets()) {
-            /// Adjust liquidity based on withdrawing the full amount of debt.
-            unchecked {
-                liquidity = ((_fromUsd(
-                    _toUsd(lenderLiquidity, borrowToken),
-                    address(asset)
-                ) * WAD) / _getTargetLTV());
-            }
+            uint256 debt = balanceOfDebt();
+            /// The most debt we can repay is limited by the lender's
+            /// liquidity plus any loose borrow token already held.
+            uint256 repayable = Math.min(
+                debt,
+                lenderLiquidity + balanceOfBorrowToken()
+            );
+
+            /// Collateral backing the debt we cannot repay must stay
+            /// locked at the target LTV. Sizing off the remaining debt
+            /// (rather than the repayable amount) keeps the limit correct
+            /// when the position is above the target LTV.
+            uint256 lockedCollateral = (_fromUsd(
+                _toUsd(debt - repayable, borrowToken),
+                address(asset)
+            ) * WAD) / _getTargetLTV();
+
+            liquidity = liquidity > lockedCollateral
+                ? liquidity - lockedCollateral
+                : 0;
         }
 
         return balanceOfAsset() + liquidity;
@@ -958,9 +970,9 @@ abstract contract BaseLenderBorrower is BaseHealthCheck {
     ) internal virtual returns (uint256) {
         if (_amount == 0 || _from == _to) return _amount;
 
-        ERC20(_from).forceApprove(address(exchange), type(uint256).max);
+        ERC20(_from).forceApprove(address(EXCHANGE), type(uint256).max);
 
-        return exchange.exchange(_from, _to, _amount, _minAmountOut);
+        return EXCHANGE.exchange(_from, _to, _amount, _minAmountOut);
     }
 
     /**
@@ -1056,16 +1068,14 @@ abstract contract BaseLenderBorrower is BaseHealthCheck {
     }
 
     // Manually Sell rewards
-    function claimAndSellRewards() external virtual onlyEmergencyAuthorized {
+    function claimAndSellRewards() external virtual onlyKeepers {
         _claimAndSellRewards();
     }
 
     /// @notice Sell a specific amount of `borrowToken` -> asset.
     ///     The amount of borrowToken should be loose in the strategy before this is called
     ///     max uint input will sell any excess borrowToken we have.
-    function sellBorrowToken(
-        uint256 _amount
-    ) external virtual onlyEmergencyAuthorized {
+    function sellBorrowToken(uint256 _amount) external virtual onlyManagement {
         if (_amount == type(uint256).max) {
             uint256 _balanceOfBorrowToken = balanceOfBorrowToken();
             uint256 have = balanceOfLentAssets() + _balanceOfBorrowToken;
@@ -1078,9 +1088,7 @@ abstract contract BaseLenderBorrower is BaseHealthCheck {
         _sellBorrowToken(_amount);
     }
 
-    function buyBorrowToken(
-        uint256 _amount
-    ) external virtual onlyEmergencyAuthorized {
+    function buyBorrowToken(uint256 _amount) external virtual onlyManagement {
         if (_amount == type(uint256).max) {
             _amount = borrowTokenOwedBalance();
         }

@@ -11,6 +11,8 @@ interface IStrategyInterface is IStrategy, ILenderBorrower {
 
     function GOV() external view returns (address);
 
+    function MERKL_DISTRIBUTOR() external view returns (address);
+
     function sweep(address _token) external;
 
     // Morpho-specific views
@@ -27,17 +29,10 @@ interface IStrategyInterface is IStrategy, ILenderBorrower {
 
     function rewardTokens(uint256 _index) external view returns (address);
 
+    function borrowUsdOracle() external view returns (address);
+
     // Morpho-specific management setters
-    function setRewardAprOracle(address _oracle) external;
-
-    function setUsdOracles(
-        address _assetUsdOracle,
-        address _borrowUsdOracle
-    ) external;
-
-    function setAuction(address _auction) external;
-
-    function setUseAuction(bool _useAuction) external;
+    function setBorrowUsdOracle(address _borrowUsdOracle) external;
 
     function addRewardToken(address _rewardToken) external;
 

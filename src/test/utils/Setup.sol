@@ -100,7 +100,7 @@ contract Setup is ExtendedTest, IEvents {
     uint256 public MAX_BPS = 10_000;
 
     // Fuzz amounts sized for WBTC (8 decimals)
-    uint256 public maxFuzzAmount = 5e7; // 0.5 WBTC
+    uint256 public maxFuzzAmount = 150e8; // 150 WBTC
     uint256 public minFuzzAmount = 1e6; // 0.01 WBTC
 
     // Default profit max unlock time is set for 10 days

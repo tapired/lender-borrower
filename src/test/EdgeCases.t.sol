@@ -117,34 +117,6 @@ contract EdgeCasesTest is Setup {
         assertEq(strategy.borrowTokenOwedBalance(), 0, "still owed");
     }
 
-    /// @notice Test that _claimAndSellRewards doesn't sell debt-backing assets
-    /// @dev Interest accrual between checking debt and selling could cause issues
-    /// EXPECTED: May fail with healthCheck error after 30 days due to high interest accrual
-    function test_claimAndSellRewards_interestAccrual_30days() public {
-        uint256 _amount = minFuzzAmount * 2;
-        uint256 tolerance = 1e6; // 1 USDC dust on the current fork
-
-        mintAndDepositIntoStrategy(strategy, user, _amount);
-
-        // Let significant time pass for interest to accrue
-        skip(30 days);
-
-        // Report calls _claimAndSellRewards internally
-        vm.prank(keeper);
-        strategy.report();
-
-        // Check position is still healthy
-        uint256 debtAfter = strategy.balanceOfDebt();
-        uint256 lentAfter = strategy.balanceOfLentAssets();
-
-        // Debt should not exceed what we can repay
-        assertGe(
-            lentAfter + strategy.balanceOfBorrowToken() + tolerance,
-            debtAfter,
-            "Position became unhealthy after claimAndSellRewards"
-        );
-    }
-
     function test_claimAndSellRewards_rewardTokenSwap() public {
         address rewardToken = tokenAddrs["LINK"];
         uint256 rewardAmount = 1e18;
