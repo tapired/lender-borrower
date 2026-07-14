@@ -16,6 +16,11 @@ abstract contract BaseLenderBorrower is BaseHealthCheck {
 
     uint256 internal constant WAD = 1e18;
 
+    /// Tolerance for rounding dust. Amounts at or below this many wei
+    /// are treated as negligible so ERC4626/oracle round-downs can't
+    /// flip logic branches or trigger dust-sized swaps.
+    uint256 internal constant DUST = 100;
+
     /// The exchange that will be used for swaps.
     IExchange public immutable EXCHANGE;
 
@@ -236,11 +241,13 @@ abstract contract BaseLenderBorrower is BaseHealthCheck {
         uint256 have = balanceOfLentAssets() + balanceOfBorrowToken();
         uint256 owe = balanceOfDebt();
 
-        if (have > owe) {
+        /// Only act if the gap is more than dust so rounding doesn't
+        /// trigger dust-sized withdrawals or swaps every report.
+        if (have > owe + DUST) {
             uint256 amountToSell = have - owe;
             _withdrawFromLender(amountToSell);
             _sellBorrowToken(Math.min(amountToSell, balanceOfBorrowToken()));
-        } else if (owe > have) {
+        } else if (owe > have + DUST) {
             uint256 assetIn = _assetInForBorrowToken(owe - have);
 
             uint256 assetBalance = balanceOfAsset();
@@ -432,7 +439,7 @@ abstract contract BaseLenderBorrower is BaseHealthCheck {
     ) public view virtual override returns (uint256) {
         /// Default liquidity is the balance of collateral + 1 for rounding.
         uint256 liquidity = balanceOfCollateral() + 1;
-        uint256 lenderLiquidity = _lenderMaxWithdraw();
+        uint256 lenderLiquidity = _lenderMaxWithdraw() + 2;
 
         if (lenderLiquidity < balanceOfLentAssets()) {
             uint256 debt = balanceOfDebt();
@@ -562,10 +569,10 @@ abstract contract BaseLenderBorrower is BaseHealthCheck {
         if (
             /// if we didn't get enough
             _needed > balanceOfAsset() - balance &&
-            /// still some debt remaining
-            balanceOfDebt() > 0 &&
-            /// but no capital to repay
-            balanceOfLentAssets() == 0 &&
+            /// still some debt remaining worth buying for
+            balanceOfDebt() > DUST &&
+            /// but no capital to repay other than rounding dust
+            balanceOfLentAssets() <= DUST &&
             /// And the leave debt flag is false.
             !leaveDebtBehind
         ) {
@@ -627,7 +634,7 @@ abstract contract BaseLenderBorrower is BaseHealthCheck {
         if (amount == 0) return 0;
         uint256 collateral = balanceOfCollateral();
         /// To unlock all collateral we must repay all the debt
-        if (amount >= collateral) return balanceOfDebt();
+        if (amount + DUST >= collateral) return balanceOfDebt();
 
         /// We check if the collateral that we are withdrawing leaves us in a risky range, we then take action
         uint256 newCollateralUsd = _toUsd(collateral - amount, address(asset));

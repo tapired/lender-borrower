@@ -19,6 +19,63 @@ contract OperationTest is Setup {
         assertEq(strategy.keeper(), keeper);
     }
 
+    function test_operation(uint256 _amount) public {
+        vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
+
+        // Set protocol fee to 0 and perf fee to 0
+        setFees(0, 0);
+
+        // Deposit into strategy
+        mintAndDepositIntoStrategy(strategy, user, _amount);
+
+        uint256 targetLTV = (strategy.getLiquidateCollateralFactor() *
+            strategy.targetLTVMultiplier()) / MAX_BPS;
+
+        checkStrategyTotals(strategy, _amount, _amount, 0);
+        assertEq(strategy.totalAssets(), _amount, "!totalAssets");
+        assertApproxEqRel(strategy.getCurrentLTV(), targetLTV, 1e15); // 0.1%
+        assertApproxEqAbs(
+            strategy.balanceOfCollateral(),
+            _amount,
+            10,
+            "!balanceOfCollateral"
+        );
+        assertApproxEqRel(
+            strategy.balanceOfDebt(),
+            strategy.balanceOfLentAssets(),
+            1e15
+        ); // 0.1%
+
+        // Earn Interest
+        skip(1 days);
+
+        uint256 toAirdrop = _amount / 1000;
+        airdrop(asset, address(strategy), toAirdrop);
+
+        // Report profit
+        vm.prank(keeper);
+        (uint256 profit, uint256 loss) = strategy.report();
+
+        // Check return Values
+        assertGe(profit, 0, "!profit");
+        assertEq(loss, 0, "!loss");
+
+        uint256 balanceBefore = asset.balanceOf(user);
+
+        // Withdraw all funds
+        vm.prank(user);
+        strategy.redeem(_amount, user, user);
+
+        assertApproxEqRel(
+            asset.balanceOf(user),
+            balanceBefore + _amount,
+            1e15,
+            "!final balance"
+        ); // 0.1%
+
+        checkStrategyTotals(strategy, 0, 0, 0);
+    }
+
     function test_basicDepositWithdraw(uint256 _amount) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
 
@@ -66,17 +123,21 @@ contract OperationTest is Setup {
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
 
-        // Let some time pass to accrue interest and enable profit.
+        // Let some time pass to accrue interest.
         skip(2 days);
+
+        // Airdrop asset to simulate yield above any negative carry.
+        uint256 toAirdrop = _amount / 100;
+        airdrop(asset, address(strategy), toAirdrop);
 
         vm.prank(keeper);
         (uint256 profit, uint256 loss) = strategy.report();
 
-        assertGe(strategy.totalAssets(), _amount / 2, "assets too low");
-        assertGe(
-            profit + strategy.totalAssets(),
-            strategy.totalAssets() - loss
-        );
+        assertEq(loss, 0, "!loss");
+        assertGt(profit, 0, "!profit");
+        // Profit is the airdrop minus the interest gap from the skip.
+        assertApproxEqRel(profit, toAirdrop, 0.2e18, "!profit amount");
+        assertGe(strategy.totalAssets(), _amount, "!totalAssets");
     }
 
     function test_manualRepayReducesDebt(uint256 _amount) public {

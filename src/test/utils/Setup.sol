@@ -134,6 +134,8 @@ contract Setup is ExtendedTest, IEvents {
 
         borrowToken = strategy.borrowToken();
 
+        factory = strategy.FACTORY();
+
         // label all the used addresses for traces
         vm.label(keeper, "keeper");
         vm.label(address(asset), "asset");
@@ -167,6 +169,8 @@ contract Setup is ExtendedTest, IEvents {
 
         // Set loss limit ratio to .1% (10 bps) to allow for interest accrual between reports
         _strategy.setLossLimitRatio(10);
+
+        _strategy.setProfitMaxUnlockTime(0);
 
         vm.stopPrank();
 
